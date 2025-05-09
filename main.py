@@ -2,6 +2,7 @@ from flask import Flask, render_template_string, request, redirect, url_for, ses
 from flask_sqlalchemy import SQLAlchemy
 from functools import wraps
 from datetime import timedelta, datetime
+from flask import jsonify
 
 app = Flask(__name__)
 app.secret_key = 'FMC8707$-secret-key-789'  # Required for sessions
@@ -522,6 +523,166 @@ management_template = """
 </ul>
 """
 
+specialties_template = """
+<!doctype html>
+<head>
+    <title>Our Specialties - First MedCare</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f8fafc;
+        }
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+        .nav-logo-img {
+            height: 50px;
+            width: auto;
+        }
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+        }
+        nav {
+            background: white;
+            padding: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        nav a {
+            color: #1e293b;
+            text-decoration: none;
+            margin-right: 1.5rem;
+            font-weight: 500;
+        }
+        nav a:hover {
+            color: #3b82f6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .specialty-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+        }
+        .specialty-button {
+            background: white;
+            border: 1px solid #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .specialty-button:hover {
+            transform: scale(1.02);
+            border-color: #3b82f6;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 90%;
+            z-index: 1000;
+        }
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .close-modal {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            border: none;
+            background: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #64748b;
+        }
+        .doctor-info {
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-logo">
+            <img src="/static/FMC LOGO PNG GOOD.png" alt="First MedCare Logo" class="nav-logo-img">
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/query_page">Verify Insurance</a>
+                <a href="/management">Management</a>
+            </div>
+        </div>
+    </nav>
+    <div class="container">
+        <h2>Our Specialties</h2>
+        <div class="specialty-grid">
+            {% for specialty in specialties %}
+                <button class="specialty-button" onclick="showSpecialtyDetails('{{ specialty }}')">
+                    {{ specialty }}
+                </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="modal-backdrop" onclick="closeModal()"></div>
+    <div class="modal">
+        <button class="close-modal" onclick="closeModal()">&times;</button>
+        <h3 id="modal-title"></h3>
+        <div id="modal-content" class="doctor-info"></div>
+    </div>
+
+    <script>
+        function showSpecialtyDetails(specialty) {
+            fetch(`/specialty/${specialty}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('modal-title').textContent = specialty;
+                    let content = '';
+                    data.forEach(item => {
+                        content += `<div class="doctor-info">
+                            <strong>Dr. ${item.doctor}</strong><br>
+                            Accepts: ${item.insurances.length ? item.insurances.join(', ') : 'No insurances listed'}
+                        </div>`;
+                    });
+                    document.getElementById('modal-content').innerHTML = content;
+                    document.querySelector('.modal').style.display = 'block';
+                    document.querySelector('.modal-backdrop').style.display = 'block';
+                });
+        }
+
+        function closeModal() {
+            document.querySelector('.modal').style.display = 'none';
+            document.querySelector('.modal-backdrop').style.display = 'none';
+        }
+    </script>
+</body>
+"""
+
 query_template = """
 <!doctype html>
 <head>
@@ -656,8 +817,8 @@ query_template = """
     <div class="search-container">
       <div class="button-container">
         <button onclick="showSearch('insurance')" class="search-button">Search by Insurance</button>
-        <button onclick="showSearch('specialty')" class="search-button">Search by Specialty</button>
         <button onclick="showSearch('doctor')" class="search-button">Search by Doctor</button>
+        <button onclick="showSearch('specialty')" class="search-button">Search by Specialty</button>
       </div>
 
       <div id="insuranceSearch" class="search-box" style="display: none;">
@@ -669,13 +830,44 @@ query_template = """
         </div>
       </div>
 
-      <div id="specialtySearch" class="search-box" style="display: none;">
+      <div id="specialtySearch" class="search-box specialty-container" style="display: none;">
         <div class="specialty-grid">
           {% for spec in specialties %}
-            <a href="/specialty/{{ spec }}" class="specialty-button">{{ spec }}</a>
+            <button class="specialty-button" onclick="showResults('{{ spec }}')">{{ spec }}</button>
           {% endfor %}
         </div>
       </div>
+
+      <style>
+        .specialty-container {
+          width: 100%;
+          max-width: 800px;
+          margin: 0 auto;
+        }
+        .specialty-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 1rem;
+          padding: 1rem;
+          width: 100%;
+        }
+        .specialty-button {
+          background: #3b82f6;
+          color: white;
+          padding: 1rem;
+          border: none;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          font-size: 1rem;
+          transition: all 0.2s;
+          width: 100%;
+          text-align: center;
+        }
+        .specialty-button:hover {
+          background: #2563eb;
+          transform: scale(1.05);
+        }
+      </style>
 
       <div id="doctorSearch" class="search-box" style="display: none;">
         <input type="text" onkeyup="filterItems('doctor')" placeholder="Search for doctor...">
@@ -715,437 +907,684 @@ query_template = """
     function updateResults(type, value) {
       window.location.href = `/query_page?${type}_query=${encodeURIComponent(value)}`;
     }
+
+    function showResults(specialty) {
+      window.location.href = `/query_page?specialty_query=${encodeURIComponent(specialty)}`;
+        }
     </script>
 
     <style>
     .centered-title {
-      text-align: center;
-      margin-bottom: 2rem;
+      text-align: center;      margin-bottom: 2rem;
     }
 
     .button-container {
       display: flex;
+      justify-content: center;
       gap: 1rem;
       margin-bottom: 2rem;
-      justify-content: center;
-      flex-wrap: wrap;
     }
 
     .search-button {
       padding: 0.75rem 1.5rem;
-      background: #3b82f6;
-      color: white;
-      border: none;
-      border-radius: 0.375rem;
-      cursor: pointer;
-      font-weight: 500;
-      transition: background-color 0.2s;
-      min-width: 200px;
-    }
-
-    .search-button:hover {
-      background: #2563eb;
+      font-size: 1rem;
     }
 
     .search-box {
-      max-width: 500px;
-      margin: 0 auto;
+      position: relative;
+      margin-top: 1rem;
     }
 
-    .search-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+    .search-box input {
       width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.375rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      background: white;
+      width: 100%;
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.375rem;
+      z-index: 1000;
+    }
+
+    .dropdown-content a {
+      color: #1e293b;
+      padding: 0.75rem;
+      text-decoration: none;
+      display: block;
+    }
+
+    .dropdown-content a:hover {
+      background: #f1f5f9;
     }
     </style>
 
-<style>
-.search-container {
-  display: flex;
-  gap: 2rem;
-  margin-bottom: 2rem;
-}
+    {% if insurance_query %}
+      <div class="results">
+        <h3>Doctors accepting {{ insurance_query }}:</h3>
+        <ul>
+          {% for doc in matching_doctors %}
+            <li>{{ doc.name }} - <span style="color: #4b5563; font-style: italic;">{{ doc.specialties }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
 
-.search-box {
-  position: relative;
-  flex: 1;
-}
+    {% if doctor_query %}
+      <div class="results">
+        <h3>Insurance plans accepted by {{ doctor_query }}:</h3>
+        <ul>
+          {% for ins in matching_insurance %}
+            <li>{{ ins }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
 
-.search-box input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.375rem;
-}
-
-.dropdown-content {
-  display: none;
-  position: absolute;
-  background-color: #fff;
-  min-width: 100%;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-  border-radius: 0.375rem;
-  max-height: 300px;
-  overflow-y: auto;
-  z-index: 1000;
-}
-
-.dropdown-content a {
-  color: #1e293b;
-  padding: 0.75rem;
-  text-decoration: none;
-  display: block;
-}
-
-.dropdown-content a:hover {
-  background-color: #f1f5f9;
-}
-
-.specialty-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  padding: 1rem;
-}
-
-.specialty-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
-  color: #1e293b;
-  text-decoration: none;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.specialty-button:hover {
-  transform: scale(1.05);
-  background: #f8fafc;
-  border-color: #3b82f6;
-}
-</style>
-
-{% if query_result %}
-<h3>Query Result</h3>
-<ul>
-  {% for item in query_result %}
-    <li>{{ item }}</li>
-  {% endfor %}
-</ul>
-{% endif %}
+    {% if specialty_query %}
+      <div class="results">
+        <h3>Doctors with specialty {{ specialty_query }}:</h3>
+        <ul>
+          {% for doc in matching_doctors %}
+            <li>{{ doc }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+  </div>
+</body>
 """
 
-@app.route("/")
+@app.route('/')
 def index():
-    doctors = [d.name for d in Doctor.query.all()]
-    insurances = [i.name for i in Insurance.query.all()]
-    relationships = [(d.doctor.name, d.insurance.name) for d in DoctorInsurance.query.all()]
-    return render_template_string(html_template, doctors=doctors, insurances=insurances, relationships=relationships)
+    return render_template_string(html_template)
 
-@app.route("/add_doctor", methods=["POST"])
-def add_doctor():
-    name = request.form["doctor_name"]
-    if name:
-        doctor = Doctor(name=name)
-        db.session.add(doctor)
-        db.session.commit()
-    return redirect(url_for("management"))
-
-@app.route("/add_insurance", methods=["POST"])
-def add_insurance():
-    name = request.form["insurance_name"]
-    if name:
-        insurance = Insurance(name=name)
-        db.session.add(insurance)
-        db.session.commit()
-    return redirect(url_for("management"))
-
-@app.route("/add_specialty", methods=["POST"])
-def add_specialty():
-    name = request.form["specialty_name"]
-    if name:
-        specialty = Specialty(name=name)
-        db.session.add(specialty)
-        db.session.commit()
-    return redirect(url_for("management"))
-
-@app.route("/link", methods=["POST"])
-def link():
-    doctor = Doctor.query.filter_by(name=request.form["doctor"]).first()
-    insurance = Insurance.query.filter_by(name=request.form["insurance"]).first()
-    if doctor and insurance:
-        link = DoctorInsurance(doctor=doctor, insurance=insurance)
-        db.session.add(link)
-        db.session.commit()
-    return redirect(url_for("management"))
-
-@app.route("/link_specialty", methods=["POST"])
-def link_specialty():
-    doctor = Doctor.query.filter_by(name=request.form["doctor"]).first()
-    specialty = Specialty.query.filter_by(name=request.form["specialty"]).first()
-    if doctor and specialty:
-        link = DoctorSpecialty(doctor=doctor, specialty=specialty)
-        db.session.add(link)
-        db.session.commit()
-    return redirect(url_for("management"))
-
-@app.route("/unlink", methods=["POST"])
-def unlink():
-    doctor = Doctor.query.filter_by(name=request.form["doctor"]).first()
-    insurance = Insurance.query.filter_by(name=request.form["insurance"]).first()
-    if doctor and insurance:
-        DoctorInsurance.query.filter_by(doctor=doctor, insurance=insurance).delete()
-        db.session.commit()
-    return redirect(url_for("management"))
-
-@app.route("/unlink_specialty", methods=["POST"])
-def unlink_specialty():
-    doctor = Doctor.query.filter_by(name=request.form["doctor"]).first()
-    specialty = Specialty.query.filter_by(name=request.form["specialty"]).first()
-    if doctor and specialty:
-        DoctorSpecialty.query.filter_by(doctor=doctor, specialty=specialty).delete()
-        db.session.commit()
-    return redirect(url_for("management"))
-
-@app.route("/delete_doctor", methods=["POST"])
-def delete_doctor():
-    name = request.form["doctor_name"]
-    doctor = Doctor.query.filter_by(name=name).first()
-    if doctor:
-        DoctorInsurance.query.filter_by(doctor=doctor).delete()
-        DoctorSpecialty.query.filter_by(doctor=doctor).delete()
-        db.session.delete(doctor)
-        db.session.commit()
-    return redirect(url_for("management"))
-
-@app.route("/delete_insurance", methods=["POST"])
-def delete_insurance():
-    name = request.form["insurance_name"]
-    insurance = Insurance.query.filter_by(name=name).first()
-    if insurance:
-        DoctorInsurance.query.filter_by(insurance=insurance).delete()
-        db.session.delete(insurance)
-        db.session.commit()
-    return redirect(url_for("management"))
-
-@app.route("/delete_specialty", methods=["POST"])
-def delete_specialty():
-    name = request.form["specialty_name"]
-    specialty = Specialty.query.filter_by(name=name).first()
-    if specialty:
-        DoctorSpecialty.query.filter_by(specialty=specialty).delete()
-        db.session.delete(specialty)
-        db.session.commit()
-    return redirect(url_for("management"))
-
-@app.route("/login", methods=["GET", "POST"])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == "POST":
-        if request.form.get("password") == "FMC8707$":
-            session.permanent = True
-            session['authenticated'] = True
-            return redirect(url_for("management"))
-        return "Invalid password", 401
-    return '''
-    <!doctype html>
-    <head>
-        <title>Login - First MedCare</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-        <style>
-            .logo {
-              height: 40px;
-              vertical-align: middle;
-            }
-            .nav-logo {
-              display: flex;
-              align-items: center;
-              gap: 2rem;
-            }
-            .nav-logo-img {
-              height: 50px;
-              width: auto;
-            }
-            .nav-links {
-              display: flex;
-              gap: 1.5rem;
-            }
-            body {
-                font-family: 'Inter', sans-serif;
-                display: flex;
-                justify-content: center;
-                align-items: center                height: 100vh;
-                margin: 0;
-                background: #f8fafc;
-            }
-            .login-container {
-                background: white;
-                padding: 2rem;
-                border-radius: 0.5rem;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                width: 300px;
-            }
-            input {
-                width: 100%;
-                padding: 0.75rem;
-                margin: 0.5rem auto;
-                border: 1px solid #e2e8f0;
-                border-radius: 0.375rem;
-                box-sizing: border-box;
-                display: block;
-            }
-            input[type="submit"], button, .button, select, input[type="text"] {
-                transition: all 0.2s ease-in-out;
-                transform-origin: center;
-            }
+    if request.method == 'POST':
+        session['authenticated'] = request.form['password'] == 'FMC8707$'
+        if session['authenticated']:
+            session.permanent = True  # Make the session permanent
+            return redirect(url_for('management'))
+        else:
+            return render_template_string('<p>Incorrect password</p><a href="{{ url_for("login") }}">Try again</a>')
+    return render_template_string("""
+<head>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            width: 300px;
+        }
+        input {
+            margin: 10px 0;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #3b82f6;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+    </style>
+</head>
+<form method="post">
+    <input type="password" name="password" placeholder="Password">
+    <button type="submit">Login</button>
+</form>
+""")
 
-            input[type="submit"], button, .button {
-                background: #3b82f6;
-                color: white;
-                border: none;
-                cursor: pointer;
-                font-weight: 500;
-                padding: 0.5rem 1rem;
-                border-radius: 0.375rem;
-            }
+@app.route('/logout')
+def logout():
+    session.pop('authenticated', None)
+    return redirect(url_for('index'))
 
-            input[type="submit"]:hover, button:hover, .button:hover {
-                background: #2563eb;
-                transform: scale(1.05);
-            }
-
-            input[type="submit"]:active, button:active, .button:active {
-                transform: scale(0.95);
-            }
-
-            select:hover, input[type="text"]:hover {
-                transform: scale(1.02);
-                border-color: #3b82f6;
-            }
-
-            select:focus, input[type="text"]:focus {
-                transform: scale(1.02);
-                border-color: #2563eb;
-                outline: none;
-                box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-            }
-            h2 {
-                margin: 0 0 1rem 0;
-                color: #1e293b;
-                text-align: center;
-            }
-            .back-button {
-                display: block;
-                text-align: center;
-                margin-top: 1rem;
-                color: #3b82f6;
-                text-decoration: none;
-            }
-            .back-button:hover {
-                text-decoration: underline;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="login-container">
-            <h2>Management Login</h2>
-            <form method="post">
-                <input type="password" name="password" placeholder="Enter password" required>
-                <input type="submit" value="Login">
-            </form>
-            <a href="/" class="back-button">← Back to Home</a>
-        </div>
-    </body>
-    '''
-
-@app.route("/management")
+@app.route('/management', methods=['GET', 'POST'])
 @requires_auth
 def management():
+    global insurances, relationships
     doctors = [d.name for d in Doctor.query.all()]
     insurances = [i.name for i in Insurance.query.all()]
     specialties = [s.name for s in Specialty.query.all()]
     relationships = [(d.doctor.name, d.insurance.name) for d in DoctorInsurance.query.all()]
-    specialty_relationships = [(d.doctor.name, d.specialty.name) for d in DoctorSpecialty.query.all()]
-    return render_template_string(management_template, doctors=doctors, insurances=insurances, specialties=specialties, relationships=relationships, specialty_relationships=specialty_relationships)
+    specialty_relationships = [(ds.doctor.name, ds.specialty.name) for ds in DoctorSpecialty.query.all()]
 
-@app.route("/specialty/<specialty_name>")
-def specialty_details(specialty_name):
+    return render_template_string(management_template, doctors=doctors, insurances=insurances, relationships=relationships, specialties=specialties, specialty_relationships=specialty_relationships)
+
+@app.route('/add_doctor', methods=['POST'])
+@requires_auth
+def add_doctor():
+    doctor_name = request.form['doctor_name']
+    new_doctor = Doctor(name=doctor_name)
+    db.session.add(new_doctor)
+    db.session.commit()
+    return redirect(url_for('management'))
+
+@app.route('/add_insurance', methods=['POST'])
+@requires_auth
+def add_insurance():
+    insurance_name = request.form['insurance_name']
+    new_insurance = Insurance(name=insurance_name)
+    db.session.add(new_insurance)
+    db.session.commit()
+    return redirect(url_for('management'))
+
+@app.route('/add_specialty', methods=['POST'])
+@requires_auth
+def add_specialty():
+    specialty_name = request.form['specialty_name']
+    new_specialty = Specialty(name=specialty_name)
+    db.session.add(new_specialty)
+    db.session.commit()
+    return redirect(url_for('management'))
+
+@app.route('/delete_doctor', methods=['POST'])
+@requires_auth
+def delete_doctor():
+    doctor_name = request.form['doctor_name']
+    doctor_to_delete = Doctor.query.filter_by(name=doctor_name).first()
+    if doctor_to_delete:
+        # Delete all doctor-insurance relationships
+        DoctorInsurance.query.filter_by(doctor_id=doctor_to_delete.id).delete()
+        # Delete all doctor-specialty relationships
+        DoctorSpecialty.query.filter_by(doctor_id=doctor_to_delete.id).delete()
+        # Delete the doctor
+        db.session.delete(doctor_to_delete)
+        db.session.commit()
+    return redirect(url_for('management'))
+
+@app.route('/delete_insurance', methods=['POST'])
+@requires_auth
+def delete_insurance():
+    insurance_name = request.form['insurance_name']
+    insurance_to_delete = Insurance.query.filter_by(name=insurance_name).first()
+    if insurance_to_delete:
+        # Delete all doctor-insurance relationships
+        DoctorInsurance.query.filter_by(insurance_id=insurance_to_delete.id).delete()
+        # Delete the insurance
+        db.session.delete(insurance_to_delete)
+        db.session.commit()
+    return redirect(url_for('management'))
+
+@app.route('/delete_specialty', methods=['POST'])
+@requires_auth
+def delete_specialty():
+    specialty_name = request.form['specialty_name']
+    specialty_to_delete = Specialty.query.filter_by(name=specialty_name).first()
+    if specialty_to_delete:
+        # Delete all doctor-specialty relationships
+        DoctorSpecialty.query.filter_by(specialty_id=specialty_to_delete.id).delete()
+        # Delete the specialty
+        db.session.delete(specialty_to_delete)
+        db.session.commit()
+    return redirect(url_for('management'))
+
+@app.route('/link', methods=['POST'])
+@requires_auth
+def link():
+    doctor_name = request.form['doctor']
+    insurance_name = request.form['insurance']
+
+    doctor = Doctor.query.filter_by(name=doctor_name).first()
+    insurance = Insurance.query.filter_by(name=insurance_name).first()
+
+    if doctor and insurance:
+        new_relationship = DoctorInsurance(doctor_id=doctor.id, insurance_id=insurance.id)
+        db.session.add(new_relationship)
+        db.session.commit()
+    return redirect(url_for('management'))
+
+@app.route('/unlink', methods=['POST'])
+@requires_auth
+def unlink():
+    doctor_name = request.form['doctor']
+    insurance_name = request.form['insurance']
+
+    doctor = Doctor.query.filter_by(name=doctor_name).first()
+    insurance = Insurance.query.filter_by(name=insurance_name).first()
+
+    if doctor and insurance:
+        relationship_to_delete = DoctorInsurance.query.filter_by(doctor_id=doctor.id, insurance_id=insurance.id).first()
+        if relationship_to_delete:
+            db.session.delete(relationship_to_delete)
+            db.session.commit()
+    return redirect(url_for('management'))
+
+@app.route('/link_specialty', methods=['POST'])
+@requires_auth
+def link_specialty():
+    doctor_name = request.form['doctor']
+    specialty_name = request.form['specialty']
+
+    doctor = Doctor.query.filter_by(name=doctor_name).first()
     specialty = Specialty.query.filter_by(name=specialty_name).first()
-    if specialty:
-        doctors_with_specialty = DoctorSpecialty.query.filter_by(specialty=specialty).all()
-        result = []
-        for relation in doctors_with_specialty:
-            doctor = relation.doctor
-            insurances = [r.insurance.name for r in DoctorInsurance.query.filter_by(doctor=doctor).all()]
-            result.append({
-                'doctor': doctor.name,
-                'insurances': insurances
-            })
-        return render_template_string("""
-            <!doctype html>
-            <head>
-                <title>{{ specialty_name }} - Doctors</title>
-                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-                <style>
-                    body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; background: #f8fafc; }
-                    .container { max-width: 800px; margin: 2rem auto; padding: 1rem; }
-                    .doctor-card { background: white; padding: 1.5rem; margin-bottom: 1rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-                    .doctor-name { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
-                    .insurance-list { color: #64748b; }
-                    .back-link { display: inline-block; margin-bottom: 1rem; color: #3b82f6; text-decoration: none; }
-                    .back-link:hover { text-decoration: underline; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <a href="/query_page" class="back-link">← Back to Search</a>
-                    <h2>Doctors Specializing in {{ specialty_name }}</h2>
-                    {% for item in result %}
-                        <div class="doctor-card">
-                            <div class="doctor-name">{{ item.doctor }}</div>
-                            <div class="insurance-list">
-                                Accepted Insurance: {{ ', '.join(item.insurances) if item.insurances else 'None' }}
-                            </div>
-                        </div>
-                    {% endfor %}
-                </div>
-            </body>
-        """, specialty_name=specialty_name, result=result)
-    return redirect(url_for('query_page'))
 
-@app.route("/query_page")
-def query_page():
+    if doctor and specialty:
+        new_specialty_relationship = DoctorSpecialty(doctor_id=doctor.id, specialty_id=specialty.id)
+        db.session.add(new_specialty_relationship)
+        db.session.commit()
+    return redirect(url_for('management'))
+
+@app.route('/unlink_specialty', methods=['POST'])
+@requires_auth
+def unlink_specialty():
+    doctor_name = request.form['doctor']
+    specialty_name = request.form['specialty']
+
+    doctor = Doctor.query.filter_by(name=doctor_name).first()
+    specialty = Specialty.query.filter_by(name=specialty_name).first()
+
+    if doctor and specialty:
+        relationship_to_delete = DoctorSpecialty.query.filter_by(doctor_id=doctor.id, specialty_id=specialty.id).first()
+        if relationship_to_delete:
+            db.session.delete(relationship_to_delete)
+            db.session.commit()
+    return redirect(url_for('management'))
+
+@app.route('/specialties')
+def specialties_page():
+    specialties = [s.name for s in Specialty.query.all()]
+    return render_template_string(specialties_template, specialties=specialties)
+
+@app.route('/specialty/<specialty>')
+def specialty(specialty):
+    doctors = []
+    specialty_obj = Specialty.query.filter_by(name=specialty).first()
+    if specialty_obj:
+        for ds in specialty_obj.doctors:
+            doctor_name = ds.doctor.name
+            insurances = [di.insurance.name for di in ds.doctor.insurances]
+            doctors.append({'doctor': doctor_name, 'insurances': insurances})
+    return jsonify(doctors)
+
+@app.route('/standalone_verify')
+def standalone_verify():
+    insurance_query = request.args.get('insurance_query')
+    doctor_query = request.args.get('doctor_query')
+    specialty_query = request.args.get('specialty_query')
+
     doctors = [d.name for d in Doctor.query.all()]
     insurances = [i.name for i in Insurance.query.all()]
     specialties = [s.name for s in Specialty.query.all()]
-    doctor_name = request.args.get("doctor_query", "")
-    insurance_name = request.args.get("insurance_query", "")
-    specialty_name = request.args.get("specialty_query", "")
-    result = []
 
-    if doctor_name:
-        doctor = Doctor.query.filter_by(name=doctor_name).first()
-        if doctor:
-            insurance_relations = DoctorInsurance.query.filter_by(doctor=doctor).all()
-            specialty_relations = DoctorSpecialty.query.filter_by(doctor=doctor).all()
-            result = ([f"Specialty: {r.specialty.name}" for r in specialty_relations] + 
-                     [f"Accepts: {r.insurance.name}" for r in insurance_relations])
-    elif insurance_name:
-        insurance = Insurance.query.filter_by(name=insurance_name).first()
+    matching_doctors = []
+    matching_insurance = []
+
+    if insurance_query:
+        insurance = Insurance.query.filter_by(name=insurance_query).first()
         if insurance:
-            relations = DoctorInsurance.query.filter_by(insurance=insurance).all()
-            result = [f"Accepted by: {r.doctor.name}" for r in relations]
-    elif specialty_name:
-        specialty = Specialty.query.filter_by(name=specialty_name).first()
+            for doctor_rel in insurance.doctors:
+                doctor = doctor_rel.doctor
+                doctor_specialties = [ds.specialty.name for ds in doctor.specialties]
+                matching_doctors.append({
+                    'name': doctor.name,
+                    'specialties': ', '.join(doctor_specialties) if doctor_specialties else 'No specialties listed'
+                })
+
+    if doctor_query:
+        doctor = Doctor.query.filter_by(name=doctor_query).first()
+        if doctor:
+            matching_insurance = [i.insurance.name for i in doctor.insurances]
+    
+    if specialty_query:
+        specialty = Specialty.query.filter_by(name=specialty_query).first()
         if specialty:
-            relations = DoctorSpecialty.query.filter_by(specialty=specialty).all()
-            result = [f"Doctor with this specialty: {r.doctor.name}" for r in relations]
+            matching_doctors = [ds.doctor.name for ds in specialty.doctors]
 
-    return render_template_string(query_template, doctors=doctors, insurances=insurances, query_result=result)
+    return render_template_string("""
+<!doctype html>
+<head>
+  <title>Insurance Verification - First MedCare</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f8fafc;
+      color: #1e293b;
+    }
+    .container {
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 2rem;
+      background: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    h2 {
+      color: #1e293b;
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+    .search-container {
+      margin-top: 2rem;
+    }
+    .button-container {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .search-button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.2s;
+    }
+    .search-button:hover {
+      background: #2563eb;
+      transform: scale(1.05);
+    }
+    .search-box {
+      position: relative;
+      margin-top: 1rem;
+    }
+    .search-box input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.375rem;
+      margin-bottom: 0.5rem;
+    }
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      background: white;
+      width: 100%;
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.375rem;
+      z-index: 1000;
+    }
+    .dropdown-content a {
+      color: #1e293b;
+      padding: 0.75rem;
+      text-decoration: none;
+      display: block;
+    }
+    .dropdown-content a:hover {
+      background: #f1f5f9;
+    }
+    .results {
+      background: #f1f5f9;
+      padding: 1.5rem;
+      border-radius: 0.375rem;
+      margin-top: 2rem;
+    }
+    .results ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .results li {
+      padding: 0.5rem 0;
+      color: #475569;
+    }
+    .specialty-container {
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .specialty-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      padding: 1rem;
+      width: 100%;
+    }
+    .specialty-button {
+      background: #3b82f6;
+      color: white;
+      padding: 1rem;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.2s;
+      width: 100%;
+      text-align: center;
+    }
+    .specialty-button:hover {
+      background: #2563eb;
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Insurance Verification</h2>
+    <div class="search-container">
+      <div class="button-container">
+        <button onclick="showSearch('insurance')" class="search-button">Search by Insurance</button>
+        <button onclick="showSearch('doctor')" class="search-button">Search by Doctor</button>
+        <button onclick="showSearch('specialty')" class="search-button">Search by Specialty</button>
+      </div>
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+      <div id="insuranceSearch" class="search-box" style="display: none;">
+        <input type="text" onkeyup="filterItems('insurance')" placeholder="Search for insurance...">
+        <div class="dropdown-content">
+          {% for ins in insurances %}
+            <a href="/standalone_verify?insurance_query={{ ins }}">{{ ins }}</a>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div id="doctorSearch" class="search-box" style="display: none;">
+        <input type="text" onkeyup="filterItems('doctor')" placeholder="Search for doctor...">
+        <div class="dropdown-content">
+          {% for doc in doctors %}
+            <a href="/standalone_verify?doctor_query={{ doc }}">{{ doc }}</a>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div id="specialtySearch" class="search-box specialty-container" style="display: none;">
+        <div class="specialty-grid">
+          {% for spec in specialties %}
+            <button class="specialty-button" onclick="showResults('{{ spec }}')">{{ spec }}</button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {% if insurance_query %}
+      <div class="results">
+        <h3>Doctors accepting {{ insurance_query }}:</h3>
+        <ul>
+          {% for doc in matching_doctors %}
+            <li>{{ doc.name }} - <span style="color: #4b5563; font-style: italic;">{{ doc.specialties }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if doctor_query %}
+      <div class="results">
+        <h3>Insurance plans accepted by {{ doctor_query }}:</h3>
+        <ul>
+          {% for ins in matching_insurance %}
+            <li>{{ ins }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if specialty_query %}
+      <div class="results">
+        <h3>Doctors with specialty {{ specialty_query }}:</h3>
+        <ul>
+          {% for doc in matching_doctors %}
+            <li>{{ doc }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+  </div>
+
+  <script>
+    function showSearch(type) {
+      document.querySelectorAll('.search-box').forEach(box => box.style.display = 'none');
+      document.getElementById(type + 'Search').style.display = 'block';
+    }
+
+    function filterItems(type) {
+      var input = document.querySelector('#' + type + 'Search input');
+      var filter = input.value.toUpperCase();
+      var dropdown = document.querySelector('#' + type + 'Search .dropdown-content');
+      var links = dropdown.getElementsByTagName("a");
+
+      for (var i = 0; i < links.length; i++) {
+        var txtValue = links[i].textContent || links[i].innerText;
+        if (txtValue.toUpperCase().indexOf(filter) > -1) {
+          links[i].style.display = "";
+        } else {
+          links[i].style.display = "none";
+        }
+      }
+      dropdown.style.display = filter ? "block" : "none";
+    }
+
+    function showResults(specialty) {
+      window.location.href = `/standalone_verify?specialty_query=${encodeURIComponent(specialty)}`;
+    }
+  </script>
+</body>
+    """,
+    doctors=doctors,
+    insurances=insurances,
+    specialties=specialties,
+    insurance_query=insurance_query,
+    doctor_query=doctor_query,
+    specialty_query=specialty_query,
+    matching_doctors=matching_doctors,
+    matching_insurance=matching_insurance)
+
+@app.route('/query_page')
+def query_page():
+    insurance_query = request.args.get('insurance_query')
+    doctor_query = request.args.get('doctor_query')
+    specialty_query = request.args.get('specialty_query')
+
+    doctors = [d.name for d in Doctor.query.all()]
+    insurances = [i.name for i in Insurance.query.all()]
+    specialties = [s.name for s in Specialty.query.all()]
+
+    matching_doctors = []
+    matching_insurance = []
+
+    if insurance_query:
+        insurance = Insurance.query.filter_by(name=insurance_query).first()
+        if insurance:
+            for doctor_rel in insurance.doctors:
+                doctor = doctor_rel.doctor
+                doctor_specialties = [ds.specialty.name for ds in doctor.specialties]
+                matching_doctors.append({
+                    'name': doctor.name,
+                    'specialties': ', '.join(doctor_specialties) if doctor_specialties else 'No specialties listed'
+                })
+
+    if doctor_query:
+        doctor = Doctor.query.filter_by(name=doctor_query).first()
+        if doctor:
+            matching_insurance = [i.insurance.name for i in doctor.insurances]
+    
+    if specialty_query:
+        specialty = Specialty.query.filter_by(name=specialty_query).first()
+        if specialty:
+            matching_doctors = [ds.doctor.name for ds in specialty.doctors]
+
+    return render_template_string(query_template,
+                               doctors=doctors,
+                               insurances=insurances,
+                               specialties=specialties,
+                               insurance_query=insurance_query,
+                               doctor_query=doctor_query,
+                               specialty_query=specialty_query,
+                               matching_doctors=matching_doctors,
+                               matching_insurance=matching_insurance)
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+
+        # Only add default data if the database is empty
+        if not Doctor.query.first():
+            try:
+                # Create default doctor
+                doctor1 = Doctor(name='Dr. Smith')
+                db.session.add(doctor1)
+                db.session.flush()
+
+                # Create default insurances
+                insurances_data = ['United Health', 'Aetna']
+                insurance_objects = []
+                for ins_name in insurances_data:
+                    if not Insurance.query.filter_by(name=ins_name).first():
+                        ins = Insurance(name=ins_name)
+                        db.session.add(ins)
+                        insurance_objects.append(ins)
+                db.session.flush()
+
+                # Create default specialties
+                specialties_data = ['Cardiology', 'Dermatology']
+                specialty_objects = []
+                for spec_name in specialties_data:
+                    if not Specialty.query.filter_by(name=spec_name).first():
+                        spec = Specialty(name=spec_name)
+                        db.session.add(spec)
+                        specialty_objects.append(spec)
+                db.session.flush()
+
+                # Link doctor with insurances
+                for insurance in insurance_objects:
+                    rel = DoctorInsurance(doctor_id=doctor1.id, insurance_id=insurance.id)
+                    db.session.add(rel)
+
+                # Link doctor with specialties
+                for specialty in specialty_objects:
+                    rel = DoctorSpecialty(doctor_id=doctor1.id, specialty_id=specialty.id)
+                    db.session.add(rel)
+
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f"Error initializing database: {e}")
+
+    app.run(host='0.0.0.0', port=5000, debug=True)
+
+    app.run(debug=True)
