@@ -1506,37 +1506,39 @@ def standalone_verify():
       </div>
     </div>
 
-    {% if insurance_query %}
+    {% if insurance_query or doctor_query or specialty_query %}
       <div class="results">
-        <h3>Doctors accepting {{ insurance_query }}:</h3>
+        <h3>Search Results:</h3>
         <ul>
           {% for doc in matching_doctors %}
-            <li>{{ doc.name }} - <span style="color: #4b5563; font-style: italic;">{{ doc.specialties }}</span></li>
+            <li class="doctor-result">
+              <h4>{{ doc.name }}</h4>
+              <p><strong>Specialties:</strong> {{ doc.specialties }}</p>
+              {% if doc.insurances and not insurance_query %}
+              <p><strong>Accepted Insurances:</strong> {{ doc.insurances }}</p>
+              {% endif %}
+            </li>
           {% endfor %}
         </ul>
       </div>
-    {% endif %}
 
-    {% if doctor_query %}
-      <div class="results">
-        <h3>Insurance plans accepted by {{ doctor_query }}:</h3>
-        <ul>
-          {% for ins in matching_insurance %}
-            <li>{{ ins }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
-
-    {% if specialty_query %}
-      <div class="results">
-        <h3>Doctors with specialty {{ specialty_query }}:</h3>
-        <ul>
-          {% for doc in matching_doctors %}
-            <li>{{ doc }}</li>
-          {% endfor %}
-        </ul>
-      </div>
+      <style>
+        .doctor-result {
+          background: white;
+          padding: 1rem;
+          margin-bottom: 1rem;
+          border-radius: 0.5rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .doctor-result h4 {
+          margin: 0 0 0.5rem 0;
+          color: #1e293b;
+        }
+        .doctor-result p {
+          margin: 0.25rem 0;
+          color: #4b5563;
+        }
+      </style>
     {% endif %}
   </div>
 
