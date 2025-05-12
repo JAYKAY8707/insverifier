@@ -421,7 +421,28 @@ management_template = """
       </div>
 
       <div class="form-column" style="width: 100%; text-align: center;">
-        <h2>Link Doctor to Insurance</h2>
+        <h2>Mass Link Doctors to Insurance</h2>
+        <form method="post" action="/mass_link" style="display: inline-block; text-align: center;">
+          <div class="form-group" style="flex-direction: column; align-items: flex-start;">
+            <div style="margin-bottom: 1rem;">
+              <input type="text" name="insurance_name" placeholder="Enter new insurance name" style="width: 300px;">
+            </div>
+            <div style="margin-bottom: 1rem;">
+              <h4 style="margin-bottom: 0.5rem;">Select Doctors:</h4>
+              <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 0.5rem; width: 500px;">
+                {% for doc in doctors %}
+                  <div style="margin-bottom: 0.5rem; display: flex; align-items: center;">
+                    <input type="checkbox" name="selected_doctors" value="{{ doc }}" id="doc_{{ loop.index }}" style="margin-right: 10px; width: 20px; height: 20px;">
+                    <label for="doc_{{ loop.index }}" style="font-size: 1.1rem;">{{ doc }}</label>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+            <input type="submit" value="Link Selected Doctors" style="margin-top: 1rem;">
+          </div>
+        </form>
+
+        <h2 style="margin-top: 2rem;">Link Doctor to Insurance</h2>
         <form method="post" action="/link" style="display: inline-block; text-align: center;">
           <div class="form-group" style="justify-content: center;">
             <select name="doctor">
@@ -1029,6 +1050,7 @@ def login():
             font-family: 'Inter', sans-serif;
             background-color: #f8fafc;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
@@ -1042,6 +1064,7 @@ def login():
             display: flex;
             flex-direction: column;
             width: 300px;
+            margin-bottom: 1rem;
         }
         input {
             margin: 10px 0;
@@ -1067,6 +1090,11 @@ def login():
     <input type="password" name="password" placeholder="Password">
     <button type="submit">Login</button>
 </form>
+<a href="/" style="text-decoration: none;">
+    <button style="background-color: #64748b; padding: 10px 15px; border: none; border-radius: 4px; color: white; cursor: pointer; transition: background-color 0.2s;">
+        Back to Home
+    </button>
+</a>
 """)
 
 @app.route('/logout')
@@ -1157,6 +1185,38 @@ def delete_specialty():
         # Delete the specialty
         db.session.delete(specialty_to_delete)
         db.session.commit()
+    return redirect(url_for('management'))
+
+@app.route('/mass_link', methods=['POST'])
+@requires_auth
+def mass_link():
+    insurance_name = request.form['insurance_name']
+    selected_doctors = request.form.getlist('selected_doctors')
+
+    # Check if insurance exists, create if it doesn't
+    insurance = Insurance.query.filter_by(name=insurance_name).first()
+    if not insurance:
+        insurance = Insurance(name=insurance_name)
+        db.session.add(insurance)
+        db.session.flush()
+
+    # Link selected doctors
+    for doctor_name in selected_doctors:
+        doctor = Doctor.query.filter_by(name=doctor_name).first()
+        if doctor:
+            # Check if relationship already exists
+            existing = DoctorInsurance.query.filter_by(
+                doctor_id=doctor.id, 
+                insurance_id=insurance.id
+            ).first()
+            if not existing:
+                new_relationship = DoctorInsurance(
+                    doctor_id=doctor.id, 
+                    insurance_id=insurance.id
+                )
+                db.session.add(new_relationship)
+
+    db.session.commit()
     return redirect(url_for('management'))
 
 @app.route('/link', methods=['POST'])
