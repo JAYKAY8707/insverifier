@@ -1633,53 +1633,9 @@ def query_page():
                                matching_doctors=matching_doctors,
                                matching_insurance=matching_insurance)
 
+# Initialize database
+with app.app_context():
+    db.create_all()
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-
-        # Only add default data if the database is empty
-        if not Doctor.query.first():
-            try:
-                # Create default doctor
-                doctor1 = Doctor(name='Dr. Smith')
-                db.session.add(doctor1)
-                db.session.flush()
-
-                # Create default insurances
-                insurances_data = ['United Health', 'Aetna']
-                insurance_objects = []
-                for ins_name in insurances_data:
-                    if not Insurance.query.filter_by(name=ins_name).first():
-                        ins = Insurance(name=ins_name)
-                        db.session.add(ins)
-                        insurance_objects.append(ins)
-                db.session.flush()
-
-                # Create default specialties
-                specialties_data = ['Cardiology', 'Dermatology']
-                specialty_objects = []
-                for spec_name in specialties_data:
-                    if not Specialty.query.filter_by(name=spec_name).first():
-                        spec = Specialty(name=spec_name)
-                        db.session.add(spec)
-                        specialty_objects.append(spec)
-                db.session.flush()
-
-                # Link doctor with insurances
-                for insurance in insurance_objects:
-                    rel = DoctorInsurance(doctor_id=doctor1.id, insurance_id=insurance.id)
-                    db.session.add(rel)
-
-                # Link doctor with specialties
-                for specialty in specialty_objects:
-                    rel = DoctorSpecialty(doctor_id=doctor1.id, specialty_id=specialty.id)
-                    db.session.add(rel)
-
-                db.session.commit()
-            except Exception as e:
-                db.session.rollback()
-                print(f"Error initializing database: {e}")
-
     app.run(host='0.0.0.0', port=5000, debug=True)
-
-    app.run(debug=True)
