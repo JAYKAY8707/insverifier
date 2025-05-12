@@ -1319,6 +1319,15 @@ def standalone_verify():
             'insurances': ', '.join(insurances) if insurances else 'No insurances listed'
         }
 
+    def get_doctor_details(doctor, search_type='all'):
+        specialties = [ds.specialty.name for ds in doctor.specialties]
+        insurances = [di.insurance.name for di in doctor.insurances] if search_type != 'insurance' else []
+        return {
+            'name': doctor.name,
+            'specialties': ', '.join(specialties) if specialties else 'No specialties listed',
+            'insurances': ', '.join(insurances) if insurances else 'No insurances listed'
+        }
+
     if insurance_query:
         insurance = Insurance.query.filter_by(name=insurance_query).first()
         if insurance:
@@ -1481,12 +1490,11 @@ def standalone_verify():
       </div>
 
       <div id="doctorSearch" class="search-box" style="display: none;">
-        <input type="text" onkeyup="filterItems('doctor')" placeholder="Search for doctor...">
-        <div class="dropdown-content">
-          {% for doc in doctors %}
-            <a href="/standalone_verify?doctor_query={{ doc }}">{{ doc }}</a>
-          {% endfor %}
-        </div>
+          <div class="specialty-grid">
+            {% for doc in doctors %}
+              <button class="specialty-button" onclick="showDoctorResults('{{ doc }}')">{{ doc }}</button>
+            {% endfor %}
+          </div>
       </div>
 
       <div id="specialtySearch" class="search-box specialty-container" style="display: none;">
@@ -1557,6 +1565,10 @@ def standalone_verify():
 
     function showResults(specialty) {
       window.location.href = `/standalone_verify?specialty_query=${encodeURIComponent(specialty)}`;
+    }
+
+    function showDoctorResults(doctor) {
+      window.location.href = `/standalone_verify?doctor_query=${encodeURIComponent(doctor)}`;
     }
   </script>
 </body>
